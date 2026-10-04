@@ -16,20 +16,36 @@ jobs:
           distribution: 'temurin'
           java-version: '11'
 
-      # 安装系统 Gradle 工具
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
 
-      # 查找 build.gradle 所在目录并编译 Debug APK
+      # 全盘搜索工程文件并编译
       - name: Build with Gradle
         run: |
-          # 查找工程根目录（防止工程在子文件夹中）
-          PROJECT_DIR=$(dirname $(find . -maxdepth 2 -name "build.gradle" | head -n 1))
-          cd "${PROJECT_DIR:-.}"
-          echo "Building in: $(pwd)"
-          gradle assembleDebug --stacktrace
+          echo "=== 打印当前仓库根目录结构 ==="
+          ls -la
 
-      # 收集生成的 APK
+          # 全盘查找包含 settings.gradle 或 build.gradle 的工程主目录
+          ROOT_FILE=$(find . -name "settings.gradle" -o -name "settings.gradle.kts" -o -name "build.gradle" -o -name "build.gradle.kts" | head -n 1)
+
+          if [ -z "$ROOT_FILE" ]; then
+            echo "❌ 严重错误：仓库中未找到任何 Gradle 配置文件！"
+            find . -maxdepth 3
+            exit 1
+          fi
+
+          TARGET_DIR=$(dirname "$ROOT_FILE")
+          echo "--> 目标工程目录定位为: $TARGET_DIR"
+          cd "$TARGET_DIR"
+
+          # 如果存在本地 gradlew 则赋予执行权限，否则调用系统 gradle
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew assembleDebug --stacktrace
+          else
+            gradle assembleDebug --stacktrace
+          fi
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
